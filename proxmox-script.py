@@ -56,6 +56,13 @@ if step == 1:
 # }
 # url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/cloudinit/dump"
 # response = requests.get(url, headers=headers, json=data, verify=False)
+#Configure Cloudinit
+# user = 'test'
+# data = {
+#     type: user
+# }
+# url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/cloudinit/dump"
+# response = requests.get(url, headers=headers, json=data, verify=False)
 
 #Delete VM
 delete = input("Do you want to delete the VM? (y/n): ")
