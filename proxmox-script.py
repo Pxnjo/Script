@@ -1,6 +1,7 @@
 import requests
 
 node = "pve-m01"
+server = "10.20.82.250"
 # API Token !!Manage Carefully!!
 headers = {
     'Authorization': 'PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d',
@@ -10,7 +11,7 @@ headers = {
 step = 0
 # Clone VM from template
 # Get already used VM id
-url = f"https://10.20.82.250:8006/api2/json/nodes/{node}/qemu"
+url = f"https://{server}:8006/api2/json/nodes/{node}/qemu"
 response = requests.get(url, headers=headers, verify=False)
 if response.status_code == 200:
     vm_list = response.json()['data']
@@ -23,7 +24,7 @@ while vmid in vm_ids:  # Se vmid è già nella lista, incrementalo
     vmid += 1
 # Clone VM
 templateId = (input("Enter the template VM ID: "))
-url = f"https://10.20.82.250:8006/api2/json/nodes/{node}/qemu/{templateId}/clone"
+url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{templateId}/clone"
 data = {
     "newid": vmid
 }
@@ -41,17 +42,25 @@ if step == 1:
     "disk": "scsi0",
     "size": "+10G"
     }
-    url = f"https://10.20.82.250:8006/api2/json/nodes/{node}/qemu/{vmid}/resize"
+    url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/resize"
     response = requests.put(url, headers=headers, json=data, verify=False)
     if response.status_code == 200:
         print("Disk resized successfully")
     else:
         print("Disk resize failed")
 
+#Configure Cloudinit
+# user = 'test'
+# data = {
+#     type: user
+# }
+# url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/cloudinit/dump"
+# response = requests.get(url, headers=headers, json=data, verify=False)
+
 #Delete VM
 delete = input("Do you want to delete the VM? (y/n): ")
 if delete == 'y':
-    url = f"https://10.20.82.250:8006/api2/json/nodes/{node}/qemu/{vmid}"
+    url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}"
     response = requests.delete(url, headers=headers, verify=False)
     if response.status_code == 200:
         print("VM deleted successfully")
