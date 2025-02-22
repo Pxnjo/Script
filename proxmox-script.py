@@ -1,12 +1,21 @@
 import requests
+import urllib3
+import urllib.parse
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 node = "pve-m01"
 server = "10.20.82.250"
 # API Token !!Manage Carefully!!
+
+#root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d
 headers = {
-    'Authorization': 'PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d',
+    'Authorization': 'PVEAPIToken=root@pam!testCasa=1a3ef4e0-412e-405c-be2e-b495f6320b84',
     'Content-Type': 'application/json'
 }
+
+def error_handler(response):
+    return response.status_code, response.text
+    #exit()
 
 step = 0
 # Clone VM from template
@@ -18,7 +27,8 @@ if response.status_code == 200:
     vm_ids = [vm['vmid'] for vm in vm_list if vm['vmid']]
     #print("VMIDs:", vm_ids)
 else:
-    print(f"Error {response.status_code}: {response.text}")
+    print(f"Error to retrieve vmid: {error_handler(response)}")
+
 vmid = 100
 while vmid in vm_ids:  # Se vmid è già nella lista, incrementalo
     vmid += 1
@@ -33,46 +43,47 @@ if response.status_code == 200:
     print("VM cloned successfully")
     step = 1
 else:
-    print("VM clone failed")
-    print(response.text)
+    print(f"VM clone failed: {error_handler(response)}")
 
 #Resize disk
 if step == 1:
     data = {
     "disk": "scsi0",
-    "size": "+10G"
+    "size": "+1G"
     }
     url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/resize"
     response = requests.put(url, headers=headers, json=data, verify=False)
     if response.status_code == 200:
         print("Disk resized successfully")
     else:
-        print("Disk resize failed")
+        print(f"Disk resize failed: {error_handler(response)}")
 
 #Configure Cloudinit
-# user = 'test'
-# data = {
-#     type: user
-# }
-# url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/cloudinit/dump"
-# response = requests.get(url, headers=headers, json=data, verify=False)
-#Configure Cloudinit
-# user = 'test'
-# data = {
-#     type: user
-# }
-# url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/cloudinit/dump"
-# response = requests.get(url, headers=headers, json=data, verify=False)
+data = {
+    "ciuser": "test",
+    "cipassword": "Vmware1!",
+    "sshkeys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAwrcE2CcP52XWHPB2bR8gK2ONuotiZFXfpl5Cpe+LmZ mmonegroup\\alessandro.custura@MM027"
+}
+data["cipassword"] = urllib.parse.quote(data["cipassword"])
+data["sshkeys"] = urllib.parse.quote(data["sshkeys"])
 
-#Delete VM
-delete = input("Do you want to delete the VM? (y/n): ")
+url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}/config"
+response = requests.put(url, headers=headers, json=data, verify=False)
+if response.status_code == 200:
+    print("Cloudinit configured successfully")
+else:
+    print(f"Cloudinit configuration failed: {error_handler(response)}")
+
+delete = input("Do you want to delete the VM? (y/n): ").strip().lower()
+while delete not in ('y', 'n'):
+    delete = input("Expected values 'y' or 'n': ").strip().lower()
+    
 if delete == 'y':
     url = f"https://{server}:8006/api2/json/nodes/{node}/qemu/{vmid}"
     response = requests.delete(url, headers=headers, verify=False)
     if response.status_code == 200:
         print("VM deleted successfully")
     else:
-        print("VM delete failed")
-        print(response.text)
+        print(f"VM delete failed: {error_handler(response)}")
 else:
     print("VM not deleted")
