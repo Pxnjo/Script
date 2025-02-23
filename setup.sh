@@ -17,6 +17,10 @@ check_library() {
 		echo "La libreria $1 è gia installata"
 	fi
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> test
 # Controlliamo tutte le librerie
 check_library "requests"
 check_library "urllib3"

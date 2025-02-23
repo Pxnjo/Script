@@ -2,8 +2,10 @@ import requests #Permette di fare richieste HTTP
 import urllib3 #Permette di disabilitare i warning per i certificati non validi
 import urllib.parse #Permette di convertire i caratteri speciali in URL
 import paramiko #Permette di fare connessioni SSH
+import time #Permette di fare pause
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) #Disabilita i warning per i certificati non validi
 
+# Gestione errori
 def error_handler(response):
     return response.status_code, response.text
 #Dichiarazone metodi
@@ -93,41 +95,67 @@ if response.status_code == 200:
 else:
     print(f"VM {vmid} start failed: {error_handler(response)}")
 
+# Get VM IP
+while True:
+    url = f"{base_url}/qemu/{vmid}/agent/network-get-interfaces"
+    response = metodo('get', url, headers)
+    if response.status_code != 200:
+        time.sleep(5)
+        url = f"{base_url}/qemu/{vmid}/agent/network-get-interfaces"
+        response = metodo('get', url, headers)
+    else:
+        ip_addr = response.json()['data']['result'][1]['ip-addresses'][0]['ip-address']
+        break
+
 # SSH connection
 client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-hostname = '192.168.144.149'
+client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) #Accetta la chiave pubblica del server se non presente nel known_hosts
+hostname = ip_addr
 port = 22
-username = 'test'
+username = 'debian'
 password = 'Vmware1!'
 client.connect(hostname, port=port, username=username, password=password)
 
-# Execute command and get output/error
-stdin, stdout, stderr = client.exec_command('sudo apt update | grep "All packages are up to date"')
-output = stdout.read().decode('utf-8')
-error = stderr.read().decode('utf-8')
-error = "\n".join([line for line in error.splitlines() if "WARNING" not in line]) # Rimuove i warning
-print(f"questo è l'output: {output}")
-print(f"questo è l'errore: {error}")
+# Check updates
+while True:
+    stdin, stdout, stderr = client.exec_command('sudo -S apt update | grep "All packages are up to date"')
+    stdin.write("Vmware1!\n")
+    stdin.flush()
+    output = stdout.read().decode('utf-8')
+    error = stderr.read().decode('utf-8')
+    # Mi è uscito questo errore una sola volta, nel caso uscisse nuovamente aggiungere una condizione per gestire l'errore, 
+    # penso sia dovuto al fatto che l'accesso ssh e il comando venga lanciato prima che il sistema non sia completamente avviato 
+    # dovrei aver comunque attenuato l'eventualità che si ripresenti
+    # E: Could not get lock /var/lib/apt/lists/lock. It is held by process 588 (apt-get)
+    # E: Unable to lock directory /var/lib/apt/lists/
+    if output == '': # Se il comando viene eseguito troppo presto, l'output verrà vuoto quindi ripete il comando
+        tdin, stdout, stderr = client.exec_command('sudo -S apt update | grep "All packages are up to date"')
+        stdin.write("Vmware1!\n")
+        stdin.flush()
+    else:
+        break
+print(f"Output degli aggiornamenti: {output}")
+if '[sudo] password for' not in error or 'WARNING' not in error:
+    print(f"Output di errore degli aggiornamenti: {error}")
 client.close()
 
-
-def deleteVM():
-        url = f"{base_url}/qemu/{vmid}/status/current"
-        response = metodo('get', url, headers)
-        status = response.json()['data']['status'] # Filtro per ottenere solo lo status
-        if status == 'stopped':
-            url = f"{base_url}/qemu/{vmid}"
-            response = metodo('delete', url, headers)
-            if response.status_code == 200:
-                print(f"VM {vmid} deleted successfully")
-            else:
-                print(f"VM {vmid} delete failed: {error_handler(response)}")
-        else:
-            url = f"{base_url}/qemu/{vmid}/status/stop"
-            response = metodo('post', url, headers, data={}) # proxmox si aspetta un json anche se vuoto
-            deleteVM()
 #Delete VM
+def deleteVM():
+    url = f"{base_url}/qemu/{vmid}/status/current"
+    response = metodo('get', url, headers)
+    status = response.json()['data']['status'] # Filtro per ottenere solo lo status
+    if status == 'stopped':
+        url = f"{base_url}/qemu/{vmid}"
+        response = metodo('delete', url, headers)
+        if response.status_code == 200:
+            print(f"VM {vmid} deleted successfully")
+        else:
+            print(f"VM {vmid} delete failed: {error_handler(response)}")
+    else:
+        url = f"{base_url}/qemu/{vmid}/status/stop"
+        response = metodo('post', url, headers, data={}) # proxmox si aspetta un json anche se vuoto
+        deleteVM()
+
 delete = input("Do you want to delete the VM? (y/n): ").strip().lower()
 while delete not in ('y', 'n'):
     delete = input("Expected values '(y/n)': ").strip().lower()
