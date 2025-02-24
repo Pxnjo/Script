@@ -18,14 +18,16 @@ def metodo(type, url, headers, data=None):
                 response = requests.delete(url, headers=headers, verify=False)
             return response
 
-node = "pve"
-server = "192.168.144.128"
+node = "pve-m01"
+server = "10.20.82.250"
 base_url = f"https://{server}:8006/api2/json/nodes/{node}"
 
 # API Token !!Manage Carefully!!
 #PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d
+#casa
+#PVEAPIToken=root@pam!testCasa=1a3ef4e0-412e-405c-be2e-b495f6320b84
 headers = {
-    'Authorization': 'PVEAPIToken=root@pam!testCasa=1a3ef4e0-412e-405c-be2e-b495f6320b84',
+    'Authorization': 'PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d',
     'Content-Type': 'application/json'
 }
 
