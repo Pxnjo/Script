@@ -3,11 +3,13 @@ import urllib3 #Permette di disabilitare i warning per i certificati non validi
 import urllib.parse #Permette di convertire i caratteri speciali in URL
 import paramiko
 import json
+import re
+import time
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) #Disabilita i warning per i certificati non validi
 
 node = "pve-m01"
 server = "10.20.82.250"
-vmid = 100
+vmid = 101
 # API Token !!Manage Carefully!!
 #PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d
 headers = {
@@ -27,53 +29,92 @@ def metodo(type, url, headers, data=None):
             elif type == 'delete':
                 response = requests.delete(url, headers=headers, verify=False)
             return response
-def check_comando_aggiornamenti(OS):
-    OS = OS.strip()
-    print(f"OS: {OS}")
-    # Apri il file JSON in modalità lettura ('r')
-    with open('main_project/os_list.json', 'r', encoding="utf-8") as file:
-        OS_list = json.load(file)  # Carica il contenuto del file JSON in una variabile Python
-    for item in OS_list:
-        #print(f"Analizzando: {item}")  # Debug: stampa il dizionario che sta analizzando
-        if OS in item['distro']:
-            update = item['update_command']
-            error_sudo = item['error_missing_sudo']
-            return update, error_sudo
-    print("OS non trovato!")  # Debug se non trova nulla
-    return None  # Se non trova nulla, restituisce None
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) #Accetta la chiave pubblica del server se non presente nel known_hosts
-hostname = '10.20.83.193'
-port = 22
-username = 'test'
-password = 'Vmware1!'
-client.connect(hostname, port=port, username=username, password=password)
-
-# Check OS
-stdin, stdout, stderr = client.exec_command("head -n 1 /etc/os-release | cut -d '\"' -f2")
-output = stdout.read().decode('utf-8')
-stderr = stderr.read().decode('utf-8')
-
-update, error_sudo = check_comando_aggiornamenti(output)
-# aggiornamenti
-while True:
-    stdin, stdout, stderr = client.exec_command(f'sudo -S {update} update ')
-    stdin.write("Vmware1!\n")
-    stdin.flush()
-    output = stdout.read().decode('utf-8')
-    error = stderr.read().decode('utf-8')
-    if error_sudo in error: # Se il comando viene eseguito troppo presto, l'output verrà vuoto quindi ripete il comando
-        stdin.write("Vmware1!\n")
-        stdin.flush()
+with open("main_project/id_ed25519.pub", "r") as file:
+    public_key = file.read().strip()
+i = 0
+def cloud_init(i, ip=None):
+    if i == 0:
+        ciuser = 'test'
+        ipconfig0 = f"ip={ip}/8,gw=10.0.1.100"
+        data = {
+            "ciuser": "test",
+            "cipassword": "Vmware1!",
+            "sshkeys": public_key,
+            "ipconfig0": ipconfig0
+        }
+    elif i == 1:
+        ciuser = 'root'
+        ipconfig0 = f"ip={ip}/8,gw=10.0.1.100"
+        data = {
+            "ciuser": "root",
+            "cipassword": "Vmware1!",
+            "sshkeys": public_key,
+            "ipconfig0": ipconfig0
+        }
     else:
-        break
+        print("Valore di 'i' non valido. Usa 0 o 1.")
+        return  # Esce dalla funzione se i non è né 0 né 1
+    
+    # Codifica la chiave SSH per l'URL
+    data["sshkeys"] = urllib.parse.quote(data["sshkeys"])
 
-# Check updates
-print("Output degli aggiornamenti:")
-for line in output.split('\n'):
-    if line != '':
-        print(f"- {line}")
-if error != '' and error_sudo not in error and 'WARNING' not in error:
-    print(f"Output di errore degli aggiornamenti: {error}")
-client.close()
+    # Invio della richiesta API
+    url = f"{base_url}/qemu/{vmid}/config"
+    response = metodo('put', url, headers, data)
+
+    # Controllo del risultato
+    if response.status_code == 200:
+        print(f"Cloudinit configured successfully\n-User: {ciuser}\n-Password: Vmware1!\n-sshkey: {public_key}\n-ip: {ipconfig0}")
+        i += i
+        return True, ciuser
+    else:
+        print(f"Cloudinit configuration failed: {error_handler(response)}")
+
+# Start VM
+def start_vm():
+    url = f"{base_url}/qemu/{vmid}/status/start"
+    response = metodo('post',  url, headers, data={}) # proxmox si aspetta un json anche se vuoto
+    if response.status_code == 200:
+        print(f"VM {vmid} started successfully")
+    else:
+        print(f"VM {vmid} start failed: {error_handler(response)}")
+
+
+# SSH connection
+client = paramiko.SSHClient()
+def ssh():
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) #Accetta la chiave pubblica del server se non presente nel known_hosts
+    hostname = ip_addr
+    port = 22
+    username = user
+    password = 'Vmware1!'
+    client.connect(hostname, port=port, username=username, password=password)
+
+# ping check
+def ping(client, timeout=30):
+    stdin, stdout, stderr = client.exec_command("ping -c 4 8.8.8.8")
+    output = stdout.read().decode('utf-8')
+    if 'time=' in output:
+        print("Ping succeeded")
+    else: 
+        print("Ping failed")
+
+# Stop VM
+def stopVM():
+    url = f"{base_url}/qemu/{vmid}/status/current"
+    response = metodo('get', url, headers)
+    status = response.json()['data']['status'] # Filtro per ottenere solo lo status
+    if status == 'stopped':
+        print(f"VM {vmid} stopped successfully")
+        return True
+    else:
+        url = f"{base_url}/qemu/{vmid}/status/stop"
+        response = metodo('post', url, headers, data={}) # proxmox si aspetta un json anche se vuoto
+        stopVM()
+user = 'test'
+ip_addr = '10.20.83.215'
+
+
+
+

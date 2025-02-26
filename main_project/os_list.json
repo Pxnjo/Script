@@ -3,30 +3,30 @@
         "update_command": "apt",
         "error_missing_sudo": "sudo",
         "distro": [
-            "Ubuntu",
-            "Debian",
-            "Linux Mint",
-            "Pop!_OS",
-            "Kali Linux",
-            "Raspbian",  
-            "Elementary OS",
-            "Zorin OS",
-            "Bodhi Linux",
-            "MX Linux"
+            "ubuntu",
+            "debian",
+            "linux mint",
+            "pop!_os",
+            "kali linux",
+            "raspbian",
+            "elementary os",
+            "zorin os",
+            "bodhi linux",
+            "mx linux"
         ]
     },
     {
         "update_command": "dnf",
         "error_missing_sudo": "superuser",
         "distro": [
-            "Red Hat Enterprise Linux (RHEL)",
-            "CentOS", 
-            "AlmaLinux",
-            "Oracle Linux",
-            "Fedora",  
-            "Rocky Linux",
-            "Scientific Linux", 
-            "Amazon Linux 2"
+            "red hat enterprise linux (rhel)",
+            "centos",
+            "almalinux",
+            "oracle linux",
+            "fedora",
+            "rocky linux",
+            "scientific linux",
+            "amazon linux 2"
         ]
     }
 ]
