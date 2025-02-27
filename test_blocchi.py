@@ -113,8 +113,35 @@ def stopVM():
         response = metodo('post', url, headers, data={}) # proxmox si aspetta un json anche se vuoto
         stopVM()
 user = 'test'
-ip_addr = '10.20.83.215'
+ip_addr = '10.20.83.219'
 
 
-
-
+# set Boot mode in UEFI or BIOS 
+n_boot = 0
+def ssh():
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) #Accetta la chiave pubblica del server se non presente nel known_hosts
+    hostname = ip_addr
+    port = 22
+    username = user
+    password = 'Vmware1!'
+    max_retries = 5  # Numero massimo di tentativi
+    attempt = 0  # Contatore dei tentativi
+    while attempt < max_retries:
+        try:
+            client.connect(hostname, port=port, username=username, password=password)
+            print(f"User '{username}' logged in successfully") # il print verrà eseguito solo se la connessione ssh riesce perchè il try in caso di errore passa direttamente dal except
+            break
+        except paramiko.ssh_exception.AuthenticationException as auth_error:
+            print(f"- User '{username}' authentication with password failed: {auth_error}")
+            break
+        except paramiko.ssh_exception.SSHException as ssh_error:
+            print(f"SSH error: {ssh_error}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        attempt += 1
+        time.sleep(10)
+    else:
+        print(f"Failed to connect to {hostname} after {max_retries} attempts")
+    client.close()
+    client.get_host_keys().clear()
+ssh()

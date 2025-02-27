@@ -1,7 +1,6 @@
 [
     {
-        "update_command": "apt",
-        "error_missing_sudo": "sudo",
+        "update_command": "apt update -y",
         "distro": [
             "ubuntu",
             "debian",
@@ -16,8 +15,7 @@
         ]
     },
     {
-        "update_command": "dnf",
-        "error_missing_sudo": "superuser",
+        "update_command": "dnf update -y",
         "distro": [
             "red hat enterprise linux (rhel)",
             "centos",
@@ -28,5 +26,13 @@
             "scientific linux",
             "amazon linux 2"
         ]
+        
+    },
+    {
+        "update_command": "sudo pacman -Syu --noconfirm",
+        "distro": [
+            "arch linux"
+        ]
+        
     }
 ]

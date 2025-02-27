@@ -4,7 +4,7 @@ import paramiko # Permette di fare connessioni SSH
 import urllib3 # Permette di disabilitare i warning per i certificati non validi
 import time # Permette di fare pause
 import json # Permette di manipolare file json
-import sys
+import logging
 import re
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita i warning per i certificati non validi
 # Dichiarazione variabili globali
@@ -13,8 +13,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita
 node = "pve-m01" #pve-m01
 server = "10.20.82.250" #10.20.82.250/192.168.144.128
 base_url = f"https://{server}:8006/api2/json/nodes/{node}"
-hostname = "pxnjo.test"
-step = 0 # Variabile che aspetta la clonazione della VM per applicare modifiche
+hostname = "rackone.prova"
 # API Token !!Manage Carefully!!
 headers = {
     'Authorization': 'PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d',
@@ -24,9 +23,9 @@ with open("main_project/id_ed25519.pub", "r") as file: # legge la chiave pubblic
     public_key = file.read().strip()
 private_key = "main_project/id_ed25519"
 client = paramiko.SSHClient() # initializza la connessione SSH
-possible_error_message = ['lock', 'unable', 'dpkg:', 'E:', 'e:']
+possible_error_message = ['lock', 'unable', 'dpkg:', 'E:', 'e:', 'Error', 'error']
 # Gestione errori
-def error_handler(response):
+def describe_errors(response):
     return response.status_code, response.text
 # Dichiarazone metodi API
 def metodo(type, url, headers, data=None):
@@ -50,7 +49,7 @@ def clone_vm():
         vm_list = response.json()['data']
         vm_ids = [vm['vmid'] for vm in vm_list if vm['vmid']]
     else:
-        print(f"Error to retrieve vmid: {error_handler(response)}")
+        print(f"Error to retrieve vmid: {describe_errors(response)}")
 
     while vmid in vm_ids:  # Se vmid è già nella lista, incrementalo
         vmid += 1
@@ -63,27 +62,28 @@ def clone_vm():
     response = metodo('post', url, headers, data)
     if response.status_code == 200:
         print(f"VM {vmid} cloned successfully")
-        step = 1
         return vmid
     else:
-        print(f"VM clone failed: {error_handler(response)}")
+        print(f"VM clone failed: {describe_errors(response)}")
+        return
 
 #Resize disk
-def resize_disk():
-    if step == 1:
+def resize_disk(check_if_cloned): #si assicura che la macchina sia clonata prima di fare il resize del disk
+    if check_if_cloned is not None:
         data = {
             "disk": "scsi0",
-            "size": "+1G"
+            "size": "+5G"
         }
         url = f"{base_url}/qemu/{vmid}/resize"
         response = metodo('put', url, headers, data)
         if response.status_code == 200:
-            print("Disk resized successfully\n- Disk: scsi0\n- Size: +1G")
+            print(f"Disk resized successfully\n- Disk: {data['disk']}\n- Size: {data['size']}")
         else:
-            print(f"Disk resize failed: {error_handler(response)}")
+            print(f"Disk resize failed: {describe_errors(response)}")
 
 #Configure Cloudinit
 i = 0
+ip_addr = '10.20.83.220'
 def cloud_init(i, ip=None):
     if i == 0:
         ciuser = 'test'
@@ -117,10 +117,10 @@ def cloud_init(i, ip=None):
     # Controllo del risultato
     if response.status_code == 200:
         print(f"Cloudinit configured successfully\n-User: {ciuser}\n-Password: Vmware1!\n-sshkey: {public_key}\n-ip: {ipconfig0}")
-        i += i
+        i += 1
         return True, ciuser
     else:
-        print(f"Cloudinit configuration failed: {error_handler(response)}")
+        print(f"Cloudinit configuration failed: {describe_errors(response)}")
 
 # set dns domain/server
 def dns_set():
@@ -133,7 +133,7 @@ def dns_set():
     if response.status_code == 200:
         print(f"Dns set successfully:\n-Search_domain: {data['searchdomain']}\n-Nameserver: {data['nameserver']}")
     else:
-        print(f"Dns set failed: {error_handler(response)}")
+        print(f"Dns set failed: {describe_errors(response)}")
 
 # set hostname
 def set_hostname():
@@ -146,7 +146,7 @@ def set_hostname():
         print(f"Hostname set successfully: {data['name']}")
         return data['name']
     else:
-        print(f"Hostname set failed: {error_handler(response)}")
+        print(f"Hostname set failed: {describe_errors(response)}")
 
 def check_xterm_js():
     url = f"{base_url}/qemu/{vmid}/config"
@@ -155,7 +155,7 @@ def check_xterm_js():
     if 'serial0' in status:
         print(f"Xterm.js serial port found: {response.json()['data']['serial0']}")
     else:
-        print(f"Xterm.js serial port not found: {error_handler(response)}")
+        print(f"Xterm.js serial port not found: {describe_errors(response)}")
 
 # Start VM
 def start_vm():
@@ -164,37 +164,60 @@ def start_vm():
     if response.status_code == 200:
         print(f"VM {vmid} started successfully")
     else:
-        print(f"VM {vmid} start failed: {error_handler(response)}")
+        print(f"VM {vmid} start failed: {describe_errors(response)}")
 
 # Get VM IP
-def get_IPvm():
+boot_counter = 0 # tiene conto di quale boot mode è stato provato
+def get_IPvm(boot_counter = None, timeout=120):
+    global ip_addr # variabile temporanea al posto del dhcp
+    start_time = time.time()  # Registra l'ora di inizio
     while True:
         url = f"{base_url}/qemu/{vmid}/agent/network-get-interfaces"
         response = metodo('get', url, headers)
-        #print(response.json())
-        if response.status_code != 200 or response.json()['data']['result'][1] is None or 'ip-addresses' not in response.json()['data']['result'][1]: # Se non trova l'ip riprova
+        if response.status_code != 200 or response.json()['data']['result'][1] is None or 'ip-addresses' not in response.json()['data']['result'][1]: # Se non trova la scritta ip-addresses riprova
             time.sleep(10)
-        elif response.json()['data']['result'][1]['ip-addresses'][0]['ip-address-type'] != 'ipv4': # Se l'ip è vuoto riprova
+        elif response.json()['data']['result'][1]['ip-addresses'][0]['ip-address-type'] != 'ipv4': # Se ip-addresses esiste ma l'ip è vuoto riprova
             time.sleep(5)
         else:
             ip_addr = response.json()['data']['result'][1]['ip-addresses'][0]['ip-address']
-            print(f'L\'ip della nuova VM è: {ip_addr}')
+            if boot_counter == 0:
+                print(f'L\'ip della nuova VM è: {ip_addr}')
             return ip_addr
-
-# Check runlevel
-def runlevel():
-    while True:
-        stdin, stdout, stderr = client.exec_command("runlevel | cut -d ' ' -f2")
-        output = stdout.read().decode('utf-8').strip()
-        if output.isdigit():  # Controlla se l'output è un numero
-            output = int(output)  # Converte in intero
-            if output < 3:
-                continue  # Riprova finché il runlevel è inferiore a 3
+        if time.time() - start_time > timeout:
+            print("Unable to get VM IP after 2min")
+            if boot_counter == 0:
+                check_boot(boot_counter) # restituisce il boot_counter = 0 siccome non è partita in uefi
+                boot_counter += 1
             else:
-                break  # Esce quando il runlevel è 3 o superiore
-        else:
-            print(f"Valore inatteso per runlevel: '{output}'")  # Debug in caso di errore
-            break  # Esce se il valore non è valido
+                return 1
+
+# set Boot mode in BIOS
+def set_bios_boot():
+    data = {
+        "bios": "seabios"
+    }
+    url = f"{base_url}/qemu/{vmid}/config"
+    response = metodo('put', url, headers, data)
+    if response.status_code == 200:
+        print(f"Boot mode set to BIOS successfully")
+        return response.status_code
+    else:
+        return f"Boot mode set to BIOS failed: {describe_errors(response)}"
+
+# check if VM boot in BIOS
+def check_boot(boot_counter = None):
+    stopVM()
+    response = set_bios_boot()
+    if response == 200:
+        start_vm()
+        boot_counter = 1
+        status = get_IPvm(boot_counter)
+        if status == 1:
+            print("VM can't boot in BIOS mode")
+            stopVM()
+            return status
+        else: # se mi ritorna l'ip address
+            print("VM booted correctly in BIOS mode")
 
 # SSH connection
 def ssh():
@@ -203,7 +226,26 @@ def ssh():
     port = 22
     username = user
     password = 'Vmware1!'
-    client.connect(hostname, port=port, username=username, password=password)
+    max_retries = 5  # Numero massimo di tentativi
+    attempt = 0  # Contatore dei tentativi
+    while attempt < max_retries:
+        try:
+            client.connect(hostname, port=port, username=username, password=password)
+            print(f"User '{username}' logged in successfully") # il print verrà eseguito solo se la connessione ssh riesce perchè il try in caso di errore passa direttamente dal except
+            break
+        except paramiko.ssh_exception.AuthenticationException as auth_error:
+            print(f"- User '{username}' authentication with password failed: {auth_error}")
+            break
+        except paramiko.ssh_exception.SSHException as ssh_error:
+            print(f"SSH error: {ssh_error}")
+        except Exception as e:
+            pass
+        attempt += 1
+        time.sleep(10)
+    else:
+        print(f"Failed to connect with user ' {user}' and password to {hostname} after {max_retries} attempts")
+    client.close()
+    client.get_host_keys().clear()
 
 # SSH connection with private key
 def ssh_key():
@@ -224,19 +266,21 @@ def ssh_key():
         except paramiko.ssh_exception.SSHException as ssh_error:
             print(f"SSH error: {ssh_error}")
         except Exception as e:
-            print(f"An error occurred: {e}")
-            
+            pass
         attempt += 1
-        print(f"Retrying... Attempt {attempt} of {max_retries}")
         time.sleep(10)
     else: 
-        print(f"Failed to connect to {hostname} after {max_retries} attempts")
-    client.close()  # Chiudi la connessione SSH
-    client.get_host_keys().clear()  # Rimuove tutte le chiavi host per evitare conflitti
+        print(f"Failed to connect with '{user}' and key to {hostname} after {max_retries} attempts")
+        return "Unable to continue with tests"
 
 # ping check
 def ping(client, timeout=30):
+    start_time = time.time() # Registra l'ora di inizio
     stdin, stdout, stderr = client.exec_command("ping -c 4 8.8.8.8")
+    while not stdout.channel.exit_status_ready(): # Aspetta che il comando finisca
+        if time.time() - start_time > timeout:
+            client.exec_command("pkill -f 'ping -c 4 8.8.8.8'") # termina
+            return "Ping timeout"
     output = stdout.read().decode('utf-8')
     if 'time=' in output:
         return "Ping succeeded"
@@ -244,14 +288,14 @@ def ping(client, timeout=30):
         return "Ping failed"
 
 # check bios or uefi mode
-def check_bios_mode():
+def check_boot_mode():
     stdin, stdout, stderr = client.exec_command("cd /sys/firmware/efi")
     output = stdout.read().decode('utf-8')
     stderr = stderr.read().decode('utf-8')
     if stderr == '':
-        print("Uefi mode")
+        print("Boot mode: UEFI")
     else:
-        print("Bios mode")
+        print("Boot mode: BIOS")
 
 # check disk size
 def check_resized_disk():
@@ -279,7 +323,7 @@ def check_resized_disk():
 
 # chech hostname
 def check_hostname():
-    stdin, stdout, stderr = client.exec_command("hostname -f")
+    stdin, stdout, stderr = client.exec_command('getent hosts | awk /"${HOSTNAME:-${HOST-}}"./\'{print $2}\'')
     output = stdout.read().decode('utf-8').strip()
     error = stderr.read().decode('utf-8')
     if hostname in output:
@@ -306,50 +350,57 @@ def check_comando_aggiornamenti(OS):
     for item in OS_list:
         if any(OS in distro for distro in item['distro']): # controlla se OS è contenuto in una stringa della lista
             update_command = item['update_command'] # cerca qual'è il comando per fare l'aggiornamento
-            error_sudo = item['error_missing_sudo'] # controlla in base alla distribuzione se vengono richiesti i permessi di sudo
-            #print(f"OS: {OS} + {update_command}")
-            return update_command, error_sudo
+            return update_command
     print("OS non trovato!")  # Debug se non trova nulla
-    return None, None  # Se non trova nulla, restituisce None
+    return None  # Se non trova nulla, restituisce None
 
 # check OS
 def check_OS():
     stdin, stdout, stderr = client.exec_command("grep '^ID=' /etc/os-release | cut -d '=' -f2")
     output = stdout.read().decode('utf-8').replace('"', '').strip() # rimuove le virgolette di alcuni sistemi operativi
     error = stderr.read().decode('utf-8')
-    update_command, error_sudo = check_comando_aggiornamenti(output)
+    update_command = check_comando_aggiornamenti(output)
     if update_command is None:
-        return None, None
-    return update_command, error_sudo
+        return None
+    return update_command
+
+# Configura il logger per gli errori
+error_logger = logging.getLogger('error_logger')
+error_handler = logging.FileHandler('main_project/error_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
+error_handler.setLevel(logging.ERROR)
+error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+error_handler.setFormatter(error_formatter)
+error_logger.addHandler(describe_errors)
+
+# Configura il logger per gli aggiornamenti (successo)
+update_logger = logging.getLogger('update_logger')
+update_handler = logging.FileHandler('main_project/update_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
+update_handler.setLevel(logging.INFO)
+update_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+update_handler.setFormatter(update_formatter)
+update_logger.addHandler(update_handler)
 
 # aggiornamenti 
 def aggiornamento():
-    update_command, error_sudo = check_OS()
+    update_command = check_OS()
     if update_command is None:
         print("Cannot perform update: OS not found")
         return # esci subito dalla funzione se l'OS non è trovato
-    max_retries = 3  # numero massimo di tentativi
+    max_retries = 2  # numero massimo di tentativi
     attempts = 0  # inizializza il contatore dei tentativi
     while attempts < max_retries:
         time.sleep(10)
-        stdin, stdout, stderr = client.exec_command(f'sudo -S {update_command} update -y', get_pty=True)
-        stdin.write("Vmware1!\n")
-        stdin.flush()
-
-        for line in iter(stdout.readline, ""):
-            sys.stdout.write(line)  # Stampa subito ogni riga di output
-            sys.stdout.flush()
+        stdin, stdout, stderr = client.exec_command(update_command)
         output = stdout.read().decode('utf-8')
         error = stderr.read().decode('utf-8')
-        if  any(error_msg in output for error_msg in possible_error_message) or any(error_msg in error for error_msg in possible_error_message):
-            print(f"Error during update: {error}")
+        if  error != '': 
+            error_logger.error(f"Try n.{attempts} ->{error}") # logga gli errori
+            print(f"Errors during update: see 'error_log.txt' for more info") # se presenti degli errori restituisce 
             attempts += 1 
             time.sleep(10)
-        if error_sudo in error: # Se il comando viene eseguito troppo presto, l'output verrà vuoto quindi ripete il comando
-            stdin.write("Vmware1!\n")
-            stdin.flush()
         else:
-            print("Update completed successfully")
+            update_logger.info(output) # logga gli aggiornamenti
+            print("Update completed successfully: see 'update_log.txt' for more info")
             break
     if attempts == max_retries:  # Se il numero massimo di tentativi è stato raggiunto
         print(f"Errore nell'aggiornamento dopo {max_retries} tentativi.")
@@ -357,8 +408,9 @@ def aggiornamento():
 # check cloud-init.target verificha che cloud-init abbia finito di inizializzare la Vm
 def check_cloud_init(timeout=300):
     output = ''
+    print("Waiting for cloud-init to finish...")
     start_time = time.time()  # Registra l'ora di inizio
-    while output != 'active':
+    while output != 'active': # ciclo che aspetta che cloud init finisca la configurazione per passare agli aggiornamenti
         stdin, stdout, stderr = client.exec_command("systemctl status cloud-init.target | grep \"Active:\" | awk '{print $2}'")
         output = stdout.read().decode('utf-8').strip()
         error = stderr.read().decode('utf-8')
@@ -397,11 +449,12 @@ def deleteVM():
         if response.status_code == 200:
             print(f"VM {vmid} deleted successfully")
         else:
-            print(f"VM {vmid} delete failed: {error_handler(response)}")
+            print(f"VM {vmid} delete failed: {describe_errors(response)}")
     else:
         url = f"{base_url}/qemu/{vmid}/status/stop"
         response = metodo('post', url, headers, data={}) # proxmox si aspetta un json anche se vuoto
         deleteVM()
+
 # request to delete VM
 def request_deleteVM():
     delete = input("Do you want to delete the VM? (y/n): ").strip().lower()
@@ -412,33 +465,42 @@ def request_deleteVM():
     else:
         print("VM not deleted")
 
-ip_addr = '10.20.83.215'
 vmid = clone_vm() # definisce il primo vmid disponibile
-resize_disk() # fa il resize del disco su proxmox
+print("-----------------------------\nSetting Proxmox configuration\n-----------------------------")
+resize_disk(vmid) # fa il resize del disco su proxmox
 set_hostname() # imposta l'hostname
 check_xterm_js() # fa il controllo se la porta seriale è presente sulla configurazione della macchina
 dns_set() # imposta il domain server e il nameserver
 i, user = cloud_init(i, ip_addr) # imposta cloud init con dhcp/user
-
-start_vm() # fa partire la vm
-ip_addr = get_IPvm() # trova l'ip asegnato da dhcp
-ssh_key() # test connessione ssh user con chiave privata
-ssh() # crea una connessione ssh
-print(f"DHCP: {ping(client)}") # risultato test config DHCP
-client.close() # chiute la connessione ssh
-client.get_host_keys().clear()  # Rimuove tutte le chiavi host
-stopVM() # ferma la VM
-
-i, user = cloud_init(i, ip_addr) # cambia il cloud init con IPV4 ricevuto prima da dhcp \ i permette di cambiare 
 start_vm() # fa ripartire la VM
-ssh_key() # test connessione ssh root con chiave privata
-ssh() # crea una connessione ssh
-print(f"IPV4 Static: {ping(client)}") # risultato test config IPV4
-check_bios_mode() # fa il check se la macchina è in bios o in uefi mode
-check_resized_disk() # verifica l'efettivo ridimensionamento del disco
-check_hostname() # comara l'hostname impostato su proxmox con quello efettivo nella macchina
-check_fstrim() # lancia il comando fstrim per liberare spazio
-runlevel() # serve a capire a che livello di avvio si trova la macchina per capire se proseguire con l'update
-check_cloud_init() # cerca prima se cloud-init ha finito di inizializzare la VM, poi cerca il sistema operativo, poi cerca di aggiornare i pacchetti
-client.close()
-request_deleteVM() # richiesta per eliminare la VM una volta eseguiti tutti i test
+boot_status = get_IPvm(boot_counter)
+if boot_status == 1: # se è uguale a 1 vuol dire che non ha fatto il boot nè in UEFI nè in BIOS
+    print("Unable to continue with tests")
+else:
+    print("---------------------------------\nChecking configuration inside the VM\n------------------------------------")
+    ssh() # fa la prova di connessione ssh con la password di user
+    status_ssh = ssh_key() # test connessione ssh user con chiave privata
+    print(f"DHCP: {ping(client)}") # risultato test config DHCP
+    client.close() # chiute la connessione ssh
+    client.get_host_keys().clear() # Rimuove tutte le chiavi host
+    stopVM() # ferma la VM
+    i, user = cloud_init(i, ip_addr) # cambia il cloud init con IPV4 ricevuto prima da dhcp \ i permette di cambiare 
+    start_vm() # fa ripartire la VM
+    boot_status = get_IPvm(1) # al riavvio della macchina se non parte finisce il test
+    if boot_status == 1:
+        print("Unable to continue with tests VM non Booted")
+    else:
+        ssh() # fa la prova di connessione ssh con la password di root
+        ssh_key() # test connessione ssh root con chiave privata
+        print(f"IPV4 Static: {ping(client)}") # risultato test config IPV4
+        #check_boot_mode() # fa il check se la macchina è in bios o in uefi mode
+        check_resized_disk() # verifica l'efettivo ridimensionamento del disco
+        check_hostname() # comara l'hostname impostato su proxmox con quello efettivo nella macchina
+        check_fstrim() # lancia il comando fstrim per liberare spazio
+        check_cloud_init() # cerca prima se cloud-init ha finito di inizializzare la VM, poi cerca il sistema operativo, poi cerca di aggiornare i pacchetti
+        client.close() # chiute la connessione ssh
+        client.get_host_keys().clear() # Rimuove tutte le chiavi host
+        if boot_status == 0:
+            check_boot() # se la macchina è partita in uefi, testare se parte ache in bios
+            stopVM()
+    request_deleteVM() # richiesta per eliminare la VM una volta eseguiti tutti i test
