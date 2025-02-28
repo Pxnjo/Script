@@ -287,9 +287,9 @@ def ping(client, timeout=30):
             return console.print(f"[bold red]❌ Ping timeout[/bold red]")
     output = stdout.read().decode('utf-8')
     if 'time=' in output:
-        return console.print(f"[bold green]✅ Ping succeeded[/bold green]")
+        return "✅ Ping succeeded"
     else: 
-        return console.print(f"[bold red]❌ Ping failed[/bold red]")
+        return "❌ Ping failed"
 
 # check bios or uefi mode
 def check_boot_mode():
