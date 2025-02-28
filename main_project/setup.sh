@@ -21,9 +21,11 @@ check_library() {
 # Controlliamo tutte le librerie
 check_library "paramiko"
 check_library "requests"
+check_library "colorama"
 check_library "urllib3"
 check_library "logging"
 check_library "urllib"
+chech_library "rich"
 check_library "time"
 check_library "json"
 check_library "re"
