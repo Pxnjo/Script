@@ -6,24 +6,18 @@ import time # Permette di fare pause
 import json # Permette di manipolare file json
 import logging
 import re
+from config import node, server, headers, hostname, private_key_path, public_key_path
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita i warning per i certificati non validi
+
 # Dichiarazione variabili globali
-# API Token lavoro PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d
-# API Token casa PVEAPIToken=root@pam!testCasa=1a3ef4e0-412e-405c-be2e-b495f6320b84
-node = "pve-m01" #pve-m01
-server = "10.20.82.250" #10.20.82.250/192.168.144.128
 base_url = f"https://{server}:8006/api2/json/nodes/{node}"
-hostname = "rackone.prova"
-# API Token !!Manage Carefully!!
-headers = {
-    'Authorization': 'PVEAPIToken=root@pam!pxnjoToken=47e7e567-d637-4146-b097-f78fbdd14c7d',
-    'Content-Type': 'application/json'
-}
-with open("main_project/id_ed25519.pub", "r") as file: # legge la chiave pubblica
+with open(public_key_path, "r") as file: # legge la chiave pubblica
     public_key = file.read().strip()
-private_key = "main_project/id_ed25519"
+
 client = paramiko.SSHClient() # initializza la connessione SSH
 possible_error_message = ['lock', 'unable', 'dpkg:', 'E:', 'e:', 'Error', 'error']
+
+
 # Gestione errori
 def describe_errors(response):
     return response.status_code, response.text
@@ -81,8 +75,6 @@ def resize_disk(check_if_cloned): #si assicura che la macchina sia clonata prima
             print(f"Disk resize failed: {describe_errors(response)}")
 
 #Configure Cloudinit
-i = 0
-ip_addr = ''
 def cloud_init(i, ip=None):
     if i == 0:
         ciuser = 'test'
@@ -191,7 +183,6 @@ def get_IPvm(boot_counter = None, timeout=120):
                 return 2 # se nemmeno al secondo tentativo non funziona allora la macchina non parte
 
 # set Boot mode in BIOS
-boot_counter = 0 # tiene conto di quale boot mode è stato provato
 def set_boot_mode(boot_counter):
     if boot_counter == 0:
         bios = 'UEFI'
@@ -251,7 +242,7 @@ def ssh_key():
     attempt = 0  # Contatore dei tentativi
     while attempt < max_retries:
         try:
-            client.connect(hostname, port=port, username=username, key_filename=private_key)
+            client.connect(hostname, port=port, username=username, key_filename=private_key_path)
             stdin, stdout, stderr = client.exec_command('whoami')
             output = stdout.read().decode('utf-8').strip()
             print(f"User '{output}' logged in successfully with the key") # il print verrà eseguito solo se la connessione ssh riesce perchè il try in caso di errore passa direttamente dal except
@@ -389,8 +380,8 @@ def aggiornamento():
     output = stdout.read().decode('utf-8').strip()
     error = stderr.read().decode('utf-8').strip()
     update_logger.debug(output) # logga gli aggiornamenti
-    error_logger.error(error) # logga gli errori
-    if  error: 
+    if error: 
+        error_logger.error(error) # logga gli errori
         print(f"Errors during update: see 'error_log.txt' for more info") # se presenti degli errori restituisce 
     if output != '':
         print("To view updates logs see 'update_log.txt' for more info")
@@ -471,6 +462,9 @@ def request_deleteVM():
 
 #--------------------INIZIO DELLO SCRIPT---------------------------#
 templateId = (input("Enter the template VM ID: "))
+boot_counter = 0 # tiene conto di quale boot mode è stato provato
+i = 0
+ip_addr = ''
 
 while True:
     vmid = clone_vm(templateId) # definisce il primo vmid disponibile
@@ -500,7 +494,7 @@ while True:
             deleteVM()
             continue # torna al inizio del ciclo 
 
-    print("---------------------------------\nChecking configuration inside the VM\n------------------------------------")
+    print("------------------------------------\nChecking configuration inside the VM\n------------------------------------")
     ssh() # fa la prova di connessione ssh con la password di user
     status_ssh = ssh_key() # test connessione ssh user con chiave privata
     print(f"DHCP: {ping(client)}") # risultato test config DHCP
@@ -520,6 +514,7 @@ while True:
         print(f"IPV4 Static: {ping(client)}") # risultato test config IPV4
         #check_boot_mode() # fa il check se la macchina è in bios o in uefi mode
         check_resized_disk() # verifica l'efettivo ridimensionamento del disco
+        check_boot_mode() # verifica dentro la macchina il boot mode
         check_hostname() # comara l'hostname impostato su proxmox con quello efettivo nella macchina
         check_fstrim() # lancia il comando fstrim per liberare spazio
         check_cloud_init() # cerca prima se cloud-init ha finito di inizializzare la VM, poi cerca il sistema operativo, poi cerca di aggiornare i pacchetti
