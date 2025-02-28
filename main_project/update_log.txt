@@ -1,4 +1,7 @@
-2025-02-28 17:57:04,073 - DEBUG - Last metadata expiration check: 0:01:46 ago on Fri 28 Feb 2025 04:55:18 PM UTC.
-Dependencies resolved.
-Nothing to do.
-Complete!
+2025-02-28 19:23:07,167 - DEBUG - Hit:1 http://security.debian.org/debian-security bookworm-security InRelease
+Hit:2 http://deb.debian.org/debian bookworm InRelease
+Hit:3 http://deb.debian.org/debian bookworm-updates InRelease
+Reading package lists...
+Building dependency tree...
+Reading state information...
+All packages are up to date.
