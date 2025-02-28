@@ -381,7 +381,9 @@ def aggiornamento():
     update_logger.debug(output) # logga gli aggiornamenti
     if error: 
         error_logger.error(error) # logga gli errori
-        print(f"Errors during update: see 'error_log.txt' for more info") # se presenti degli errori restituisce 
+        print(f"Errors during update: see 'error_log.txt' for more info") # se presenti degli errori restituisce
+    else:
+        print(f"Update finished without errors!") # se presenti degli errori restituisce
     if output != '':
         print("To view updates logs see 'update_log.txt' for more info")
 
