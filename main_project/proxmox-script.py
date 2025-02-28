@@ -1,10 +1,10 @@
 import urllib.parse # Permette di convertire i caratteri speciali in URL
 import requests # Permette di fare richieste HTTP
 import paramiko # Permette di fare connessioni SSH
+import logging # permette di fare i log
 import urllib3 # Permette di disabilitare i warning per i certificati non validi
 import time # Permette di fare pause
 import json # Permette di manipolare file json
-import logging
 import re
 from config import node, server, headers, hostname, private_key_path, public_key_path
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita i warning per i certificati non validi
@@ -16,7 +16,6 @@ with open(public_key_path, "r") as file: # legge la chiave pubblica
 
 client = paramiko.SSHClient() # initializza la connessione SSH
 possible_error_message = ['lock', 'unable', 'dpkg:', 'E:', 'e:', 'Error', 'error']
-
 
 # Gestione errori
 def describe_errors(response):
