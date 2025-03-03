@@ -5,8 +5,9 @@ import logging # permette di fare i log
 import urllib3 # Permette di disabilitare i warning per i certificati non validi
 import time # Permette di fare pause
 import json # Permette di manipolare file json
+import sys
 import re
-from config import node, server, headers, hostname, private_key_path, public_key_path
+from main_project.config import node, server, headers, hostname, private_key_path, public_key_path
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita i warning per i certificati non validi
 
 # Dichiarazione variabili globali
@@ -462,64 +463,72 @@ def request_deleteVM():
 
 
 #--------------------INIZIO DELLO SCRIPT---------------------------#
-templateId = (input("Enter the template VM ID: "))
+#templateId = (input("Enter the template VM ID: "))
+if len(sys.argv) > 1:
+    templateId = sys.argv[1]  # Prendi il primo argomento passato
+    print(f"Template ID ricevuto: {templateId}")
+else:
+    print("Errore: devi passare un Template ID come parametro!")
+    sys.exit(1)  # Esce con errore
 boot_counter = 0 # tiene conto di quale boot mode è stato provato
 i = 0
 ip_addr = ''
-
+vmid = clone_vm(templateId) # definisce il primo vmid disponibile
 while True:
-    vmid = clone_vm(templateId) # definisce il primo vmid disponibile
-    print("-----------------------------\nSetting Proxmox configuration\n-----------------------------")
-    resize_disk(vmid) # fa il resize del disco su proxmox
-    set_hostname() # imposta l'hostname
-    check_xterm_js() # fa il controllo se la porta seriale è presente sulla configurazione della macchina
-    if boot_counter == 1:
-        delete_efi_disk() # elimina il disco efi quando la vm viene avviata in bios
-        i = 0 # reimposta la variabile a di cloud init a 0
-    i, user = cloud_init(i) # imposta cloud init con dhcp/user
-    boot_mode = set_boot_mode(boot_counter) # la prima volta setta la macchina in uefi mode 
-    start_vm() # fa ripartire la VM
-    boot_counter = get_IPvm(boot_counter)
-    if boot_counter == 1:
-        print("VM doesn't boot in UEFI mode")
-        deleteVM()
-        continue
-    elif boot_counter == 2: # se è uguale a 1 vuol dire che non ha fatto il boot nè in UEFI nè in BIOS
-        print("Unable to continue with tests; the VM doesn't boot in either UEFI or BIOS")
-        stopVM()
-        break
-    else:
-        print(f"Vm booted correctly in {boot_mode}")
-        if boot_mode == 'UEFI': # solo se la macchina parte in uefi allora la elimina per fare la priva in bios
-            boot_counter = 1
+    if vmid is not None:
+        print("-----------------------------\nSetting Proxmox configuration\n-----------------------------")
+        resize_disk(vmid) # fa il resize del disco su proxmox
+        set_hostname() # imposta l'hostname
+        check_xterm_js() # fa il controllo se la porta seriale è presente sulla configurazione della macchina
+        if boot_counter == 1:
+            delete_efi_disk() # elimina il disco efi quando la vm viene avviata in bios
+            i = 0 # reimposta la variabile a di cloud init a 0
+        i, user = cloud_init(i) # imposta cloud init con dhcp/user
+        boot_mode = set_boot_mode(boot_counter) # la prima volta setta la macchina in uefi mode 
+        start_vm() # fa ripartire la VM
+        boot_counter = get_IPvm(boot_counter)
+        if boot_counter == 1:
+            print("VM doesn't boot in UEFI mode")
             deleteVM()
-            continue # torna al inizio del ciclo 
+            continue
+        elif boot_counter == 2: # se è uguale a 1 vuol dire che non ha fatto il boot nè in UEFI nè in BIOS
+            print("Unable to continue with tests; the VM doesn't boot in either UEFI or BIOS")
+            stopVM()
+            break
+        else:
+            print(f"Vm booted correctly in {boot_mode}")
+            if boot_mode == 'UEFI': # solo se la macchina parte in uefi allora la elimina per fare la priva in bios
+                boot_counter = 1
+                deleteVM()
+                continue # torna al inizio del ciclo 
 
-    print("------------------------------------\nChecking configuration inside the VM\n------------------------------------")
-    ssh() # fa la prova di connessione ssh con la password di user
-    status_ssh = ssh_key() # test connessione ssh user con chiave privata
-    print(f"DHCP: {ping(client)}") # risultato test config DHCP
-    client.close() # chiute la connessione ssh
-    client.get_host_keys().clear() # Rimuove tutte le chiavi host
-    shutdownVM() # ferma la VM
-    i, user = cloud_init(i, ip_addr) # cambia il cloud init con IPV4 ricevuto prima da dhcp \ i permette di cambiare 
-    start_vm() # fa ripartire la VM
-    boot_counter = get_IPvm(1) # al riavvio della macchina se non parte finisce il test
-    if boot_counter == 2:
-        print("Unable to continue with tests VM not Booted after reboot")
-        stopVM()
-        break
-    else:
-        ssh() # fa la prova di connessione ssh con la password di root
-        ssh_key() # test connessione ssh root con chiave privata
-        print(f"IPV4 Static: {ping(client)}") # risultato test config IPV4
-        #check_boot_mode() # fa il check se la macchina è in bios o in uefi mode
-        check_resized_disk() # verifica l'efettivo ridimensionamento del disco
-        check_boot_mode() # verifica dentro la macchina il boot mode
-        check_hostname() # comara l'hostname impostato su proxmox con quello efettivo nella macchina
-        check_fstrim() # lancia il comando fstrim per liberare spazio
-        check_cloud_init() # cerca prima se cloud-init ha finito di inizializzare la VM, poi cerca il sistema operativo, poi cerca di aggiornare i pacchetti
+        print("------------------------------------\nChecking configuration inside the VM\n------------------------------------")
+        ssh() # fa la prova di connessione ssh con la password di user
+        status_ssh = ssh_key() # test connessione ssh user con chiave privata
+        print(f"DHCP: {ping(client)}") # risultato test config DHCP
         client.close() # chiute la connessione ssh
         client.get_host_keys().clear() # Rimuove tutte le chiavi host
-        stopVM()
-    break
+        shutdownVM() # ferma la VM
+        i, user = cloud_init(i, ip_addr) # cambia il cloud init con IPV4 ricevuto prima da dhcp \ i permette di cambiare 
+        start_vm() # fa ripartire la VM
+        boot_counter = get_IPvm(1) # al riavvio della macchina se non parte finisce il test
+        if boot_counter == 2:
+            print("Unable to continue with tests VM not Booted after reboot")
+            stopVM()
+            break
+        else:
+            ssh() # fa la prova di connessione ssh con la password di root
+            ssh_key() # test connessione ssh root con chiave privata
+            print(f"IPV4 Static: {ping(client)}") # risultato test config IPV4
+            #check_boot_mode() # fa il check se la macchina è in bios o in uefi mode
+            check_resized_disk() # verifica l'efettivo ridimensionamento del disco
+            check_boot_mode() # verifica dentro la macchina il boot mode
+            check_hostname() # comara l'hostname impostato su proxmox con quello efettivo nella macchina
+            check_fstrim() # lancia il comando fstrim per liberare spazio
+            check_cloud_init() # cerca prima se cloud-init ha finito di inizializzare la VM, poi cerca il sistema operativo, poi cerca di aggiornare i pacchetti
+            client.close() # chiute la connessione ssh
+            client.get_host_keys().clear() # Rimuove tutte le chiavi host
+            stopVM()
+        break
+    else:
+        break

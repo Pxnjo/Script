@@ -1,6 +1,6 @@
 import requests #Permette di fare richieste HTTP
 import urllib3 #Permette di disabilitare i warning per i certificati non validi
-from config import node, server, headers
+from main_project.config import node, server, headers
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) #Disabilita i warning per i certificati non validi
 
 # variabile globale 
