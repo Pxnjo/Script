@@ -42,9 +42,9 @@ Execute the container and pass the parameter (e.g., 100010) to your script:
 docker run proxmox_script 100010
 ```
 Final Notes
-Configuration: Ensure that you configure config.py accurately for your environment.
-API_TOKEN: Pay close attention to this parameter and its associated permissions.
-Cloud-init: The formatting of the public key is critical.
-Distributions: Verify that the distribution name in os_list.json is written in lowercase.
-Execution Modes: Choose between native execution or via Docker depending on your needs.
+- Configuration: Ensure that you configure config.py accurately for your environment.
+- API_TOKEN: Pay close attention to this parameter and its associated permissions.
+- Cloud-init: The formatting of the public key is critical.
+- Distributions: Verify that the distribution name in os_list.json is written in lowercase.
+- Execution Modes: Choose between native execution or via Docker depending on your needs.
 
