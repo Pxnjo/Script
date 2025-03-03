@@ -2,6 +2,7 @@
 
 ## Descrizione
 Il seguente script serve ad automatizzare una serie di test da effettuare sulle nuove distribuzioni o aggiornamenti rilasciati, verificando che le modifiche apportate da Proxmox siano effettive all'interno della macchina. Nota: Lo script funziona solamente su distribuzioni Linux.
+Il branch 'nice' differisce solo negli output, che sono stati resi più leggibili e colorati. Tuttavia, attenzione, in caso di automazioni, potrebbero esserci delle incompatibilità.
 
 ## Configurazione
 Prima di eseguire lo script, è necessario configurare alcuni file:
