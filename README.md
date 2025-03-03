@@ -41,6 +41,8 @@ Execute the container and pass the parameter (e.g., 100010) to your script:
 ```
 docker run proxmox_script 100010
 ```
+In case it's needed, an easy way to delete cloned machines is by using the delete.py script, which allows for quickly removing the machines.
+
 Final Notes
 - Configuration: Ensure that you configure config.py accurately for your environment.
 - API_TOKEN: Pay close attention to this parameter and its associated permissions.
