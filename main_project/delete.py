@@ -4,7 +4,7 @@ from config import node, server, headers
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) #Disabilita i warning per i certificati non validi
 
 # variabile globale 
-base_url = f"https://{server}:8006/api2/json/nodes/{node}"
+base_url = f"https://{server}:8006/api2/json/nodesfsfsdfsdfsdfsdfsdfsdf/{node}"
 
 def error_handler(response):
     return response.status_code, response.text
