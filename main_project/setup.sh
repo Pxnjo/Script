@@ -22,13 +22,6 @@ check_library() {
 check_library "paramiko"
 check_library "requests"
 check_library "urllib3"
-check_library "logging"
-check_library "urllib"
-check_library "time"
-check_library "json"
-check_library "sys"
-check_library "re"
-
 
 # Impostiamo il permesso di esecuzione su proxmox-script.py
 sudo chmod 744 proxmox-script.py delete.py

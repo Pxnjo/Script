@@ -7,7 +7,7 @@ import time # Permette di fare pause
 import json # Permette di manipolare file json
 import sys
 import re
-from main_project.config import node, server, headers, hostname, private_key_path, public_key_path
+from config import node, server, gateway, headers, hostname, private_key_path, public_key_path
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) # Disabilita i warning per i certificati non validi
 
 # Dichiarazione variabili globali
@@ -89,7 +89,7 @@ def cloud_init(i, ip=None):
         }
     elif i == 1:
         ciuser = 'root'
-        ipconfig0 = f"ip={ip}/8,gw=10.0.1.100"
+        ipconfig0 = f"ip={ip}/8,gw={gateway}"
         data = {
             "ciuser": "root",
             "cipassword": "Vmware1!",
@@ -353,7 +353,7 @@ def check_OS():
 
 # Configura il logger per gli errori
 error_logger = logging.getLogger('error_logger')
-error_handler = logging.FileHandler('main_project/error_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
+error_handler = logging.FileHandler('main_project/logs/error_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
 error_handler.setLevel(logging.ERROR)
 error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 error_handler.setFormatter(error_formatter)
@@ -362,7 +362,7 @@ error_logger.addHandler(error_handler)
 # Configura il logger per gli aggiornamenti (successo)
 update_logger = logging.getLogger('update_logger')
 update_logger.setLevel(logging.DEBUG)
-update_handler = logging.FileHandler('main_project/update_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
+update_handler = logging.FileHandler('main_project/logs/update_log.txt', mode='w') # logga sovrascrivendo cosa c'era prima
 update_handler.setLevel(logging.DEBUG)
 update_logger.propagate = False # Evita la propagazione dei log
 update_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -463,18 +463,19 @@ def request_deleteVM():
 
 
 #--------------------INIZIO DELLO SCRIPT---------------------------#
-#templateId = (input("Enter the template VM ID: "))
+# templateId = (input("Enter the template VM ID: "))
 if len(sys.argv) > 1:
     templateId = sys.argv[1]  # Prendi il primo argomento passato
     print(f"Template ID ricevuto: {templateId}")
 else:
     print("Errore: devi passare un Template ID come parametro!")
     sys.exit(1)  # Esce con errore
+
 boot_counter = 0 # tiene conto di quale boot mode è stato provato
 i = 0
 ip_addr = ''
-vmid = clone_vm(templateId) # definisce il primo vmid disponibile
 while True:
+    vmid = clone_vm(templateId) # definisce il primo vmid disponibile
     if vmid is not None:
         print("-----------------------------\nSetting Proxmox configuration\n-----------------------------")
         resize_disk(vmid) # fa il resize del disco su proxmox

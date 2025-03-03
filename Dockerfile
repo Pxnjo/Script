@@ -4,10 +4,13 @@ WORKDIR /usr/local/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./main_project ./
+COPY main_project ./main_project
 EXPOSE 443
 
 RUN useradd app
+RUN chown -R app:app /usr/local/app
 USER app
 
-CMD [ "python", "./script.py" ]
+VOLUME ["/usr/local/app/main_project/logs"]
+
+ENTRYPOINT [ "python3", "main_project/script.py" ]
