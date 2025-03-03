@@ -1,0 +1,24 @@
+*** OBIETTIVI ***
+
+ID test		Nome			Descrizione
+1		boot-uefi		La VM Fa il boot in UEFI
+2		boot-bios		La VM Fa il boot in BIOS
+3		resize-disk		Resize automatico del disco
+4		net-ip			Configurazione Network automatica IP
+5		net-gw			Configurazione Network automatica Gateway
+6		net-dns-domain		Configurazione Network automatica DNS search domain
+7		net-dns-servers		Configurazione Network automatica DNS servers
+8		net-dhcp		Configurazione automatica rete con DHCP
+9		hostname		Configurazione Hostname
+10		root-pw			La password di root viene impostata correttamente
+11		user-pw			La password di un utente generico user viene impostata correttamente
+12		root-ssh-key		La chiave SSH di root viene impostata
+13		user-ssh-key		La chiave SSH dell'utente viene impostata
+14		root-login-pw		Root fa l'accesso con la password
+15		root-login-key		Root fa l'accesso con la chiave SSH
+16		user-login-pw		Un utente generico fa l'accesso con la password
+17		user-login-key		Un utente generico fa l'accesso con la chiave SSH
+18		update			Gli aggiornamenti automatici vengono installati
+19		fstrim			Esiste un sistema automatico che fa il trim del disco (discard)
+20		qemu-guest-agent	Il qemu-guest-agent è installato e si avvia al boot (vedete i dati da proxmox dell'IP)
+21		xtermjs			Verificare se funziona anche la console xtermjs
