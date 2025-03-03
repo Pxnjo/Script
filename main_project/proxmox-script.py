@@ -5,6 +5,7 @@ import logging # permette di fare i log
 import urllib3 # Permette di disabilitare i warning per i certificati non validi
 import time # Permette di fare pause
 import json # Permette di manipolare file json
+import sys
 import re
 from colorama import Fore, Style
 from rich.console import Console
@@ -482,7 +483,14 @@ def request_deleteVM():
 
 
 #--------------------INIZIO DELLO SCRIPT---------------------------#
-templateId = (input("Enter the template VM ID: "))
+# templateId = (input("Enter the template VM ID: "))
+if len(sys.argv) > 1:
+    templateId = sys.argv[1]  # Prendi il primo argomento passato
+    print(f"Template ID ricevuto: {templateId}")
+else:
+    print("Errore: devi passare un Template ID come parametro!")
+    sys.exit(1)  # Esce con errore
+
 boot_counter = 0 # tiene conto di quale boot mode è stato provato
 i = 0
 ip_addr = ''
